@@ -1,0 +1,93 @@
+# Real-Time Digital Twin Architecture for Additive Manufacturing
+
+This repository contains the implementation, analysis code, processed data, results, and supporting materials associated with the study:
+
+**“A Real-Time Digital Twin Architecture for Additive Manufacturing: IoT Telemetry Acquisition, Cyber-Physical Synchronization, and a Proof-of-Concept Predictive Analytics Pipeline.”**
+
+The project demonstrates an integrated real-time Digital Twin (DT) workflow for a **Prusa i3 MK3S fused deposition modeling (FDM) 3D printer**. The implemented architecture connects physical machine telemetry with IoT communication, data processing, cyber-physical synchronization, time-series storage, predictive analytics, and monitoring within a unified experimental framework.
+
+---
+
+## Project Overview
+
+The main objective of this work is to demonstrate how a real manufacturing asset can be connected to a Digital Twin infrastructure that supports:
+
+- real-time telemetry acquisition;
+- IoT-based communication;
+- cyber-physical synchronization;
+- data preprocessing and feature engineering;
+- time-series data storage;
+- machine-learning-based predictive analytics;
+- analytical output storage;
+- monitoring and visualization.
+
+The implementation is based on the first three operational layers of a broader **Causal Digital Twin Framework (CDTF)**.
+
+### Implemented layers
+
+1. **Data Acquisition and Integration**
+2. **Cyber-Physical Synchronization**
+3. **AI-Driven Analytics and Monitoring**
+
+The fourth layer, **Causal Inference and Modeling**, is outside the scope of the present implementation and is reserved for future development.
+
+---
+
+## Experimental Platform
+
+The experimental system is based on a:
+
+**Prusa i3 MK3S FDM 3D Printer**
+
+Operational information was collected from the printer together with external measurements and processed through the Digital Twin infrastructure.
+
+The implementation uses technologies including:
+
+- Python
+- MQTT
+- Node-RED
+- OctoPrint
+- PostgreSQL
+- TimescaleDB
+- pgAdmin
+- Grafana
+- Docker
+
+---
+
+## Digital Twin Workflow
+
+The implemented workflow can be summarized as:
+
+```text
+Physical 3D Printer
+        |
+        v
+Sensors / OctoPrint / External Measurements
+        |
+        v
+MQTT Communication
+        |
+        v
+Node-RED / Python Data Processing
+        |
+        v
+Cyber-Physical Synchronization
+        |
+        v
+PostgreSQL / TimescaleDB
+        |
+        v
+Data Preprocessing
+        |
+        v
+Feature Engineering
+        |
+        v
+Predictive Analytics
+        |
+        v
+Analytical Output Storage
+        |
+        v
+Monitoring / Visualization
