@@ -1,0 +1,630 @@
+# Data
+
+This directory contains the telemetry data and feature-engineered datasets used in the **Real-Time Digital Twin Architecture for Additive Manufacturing** project.
+
+The datasets originate from telemetry collected from a **Prusa MK3S 3D printer** and support the development and evaluation of the Digital Twin data pipeline, including telemetry processing, session identification, feature engineering, and predictive analytics experiments.
+
+Each telemetry record represents a snapshot of the printer's operational state at a specific timestamp. The original telemetry variables include temperature, power, fan, motor, position, extrusion, and feed-rate information. :contentReference[oaicite:0]{index=0}
+
+---
+
+## Directory Structure
+
+```text
+data/
+├── README.md
+│
+├── raw/
+│   ├── cleaned_printer_data.csv
+│   └── cleaned_printer_data_sample.csv
+│
+└── processed/
+    ├── features_engineered_revised.csv
+    └── features_engineered_revised_sample.csv
+```
+
+### `raw/`
+
+Contains the cleaned telemetry dataset used as the input for the feature-engineering pipeline.
+
+### `processed/`
+
+Contains the feature-engineered telemetry dataset generated from the cleaned telemetry data.
+
+---
+
+# Data Pipeline
+
+The overall data-processing workflow is:
+
+```text
+3D Printer Telemetry
+        |
+        v
+Original Telemetry Dataset
+        |
+        v
+Data Cleaning
+        |
+        v
+Cleaned Telemetry Dataset
+        |
+        v
+Feature Engineering
+        |
+        +---------------------------+
+        |                           |
+        v                           v
+Session Identification        Derived Features
+        |                           |
+        +-------------+-------------+
+                      |
+                      v
+          Feature-Engineered Dataset
+                      |
+                      v
+            Session-Level Analysis
+                      |
+                      v
+         Predictive Analytics Experiments
+```
+
+The data section provides the foundation for the session-summary analysis and the predictive experiments included elsewhere in the repository.
+
+---
+
+# 1. Cleaned Telemetry Data
+
+## `raw/cleaned_printer_data.csv`
+
+This dataset contains the cleaned telemetry observations collected from the additive-manufacturing system.
+
+Each row represents a snapshot of the printer's state at a specific timestamp.
+
+The telemetry data include information related to:
+
+- ambient temperature;
+- PINDA probe temperature;
+- heated-bed temperature;
+- hotend temperature;
+- tool temperature;
+- bed power;
+- hotend and electronics power;
+- fan speeds;
+- fan PWM values;
+- stepper-motor status;
+- X-axis position setpoint;
+- Y-axis position setpoint;
+- Z-axis position setpoint;
+- extrusion setpoint;
+- feed-rate setpoint.
+
+The underlying telemetry documentation identifies these variables as measurements associated with the operational state of a Prusa MK3S 3D printer. :contentReference[oaicite:1]{index=1}
+
+---
+
+## `cleaned_printer_data_sample.csv`
+
+A representative sample of the cleaned telemetry dataset is provided in this repository.
+
+The sample file contains:
+
+```text
+10,000 telemetry records
+21 variables
+```
+
+The sample is included to:
+
+- demonstrate the dataset structure;
+- document the available telemetry variables;
+- allow users to inspect the data format;
+- support reproducibility without requiring the complete large-scale dataset.
+
+The complete dataset may be substantially larger than the representative sample.
+
+---
+
+# 2. Telemetry Variables
+
+The cleaned telemetry dataset contains the following variables.
+
+| Variable | Description |
+|---|---|
+| `timestamp` | Timestamp of the telemetry observation |
+| `T_Ambient_Actual` | Ambient temperature |
+| `T_Pinda_Actual` | PINDA probe temperature |
+| `T_Bed_Setpoint` | Heated-bed target temperature |
+| `Power_Bed` | Heated-bed power consumption |
+| `T_Bed_Actual` | Actual heated-bed temperature |
+| `Speed_Fan_Hotend` | Hotend fan speed |
+| `Speed_Fan_Part` | Part cooling fan speed |
+| `PWM_Fan_Hotend` | Hotend fan PWM value |
+| `PWM_Fan_Part` | Part cooling fan PWM value |
+| `T_Hotend_Setpoint` | Hotend target temperature |
+| `Power_Hotend` | Hotend and electronics power consumption |
+| `T_Hotend_Actual` | Actual hotend temperature |
+| `T_Tool_Actual` | Actual tool temperature |
+| `T_Tool_Setpoint` | Tool temperature setpoint |
+| `StepperOnOff` | Stepper-motor status |
+| `X_Setpoint` | X-axis position setpoint |
+| `Y_Setpoint` | Y-axis position setpoint |
+| `Z_Setpoint` | Z-axis position setpoint |
+| `E_Setpoint` | Extrusion setpoint |
+| `F_Setpoint` | Feed-rate setpoint |
+
+The dataset documentation defines the temperature, power, fan, motor, position, extrusion, and feed-rate variables used in the telemetry records. :contentReference[oaicite:2]{index=2}
+
+---
+
+# 3. Data Units and Measurement Information
+
+The telemetry variables use the following general units and conventions:
+
+- temperatures are measured in **degrees Celsius (°C)**;
+- power measurements are expressed in **Watts (W)**;
+- fan speed is measured in **RPM**;
+- fan PWM values range from **0 to 255**;
+- `StepperOnOff` indicates whether the stepper motors are powered on or off;
+- temperature and position setpoints are derived from GCode commands sent to the printer.
+
+The dataset documentation further notes that power measurements were obtained from DC voltage and current measurements. :contentReference[oaicite:3]{index=3}
+
+---
+
+# 4. Data Cleaning
+
+The repository includes the script:
+
+```text
+src/preprocessing/Cleaned_Dataset.py
+```
+
+The cleaning procedure performs the following operations:
+
+```text
+Original Telemetry Data
+        |
+        v
+Timestamp Conversion
+        |
+        v
+Chronological Sorting
+        |
+        v
+Interpolation of Numeric Variables
+        |
+        v
+Removal of Remaining Missing Values
+        |
+        v
+Cleaned Telemetry Dataset
+```
+
+The cleaning script:
+
+1. loads the CSV dataset;
+2. converts the `timestamp` column to datetime format;
+3. sorts observations chronologically;
+4. linearly interpolates missing numeric values;
+5. removes rows containing remaining missing values;
+6. saves the resulting cleaned dataset as `cleaned_printer_data.csv`. :contentReference[oaicite:4]{index=4}
+
+---
+
+# 5. Feature-Engineered Data
+
+## `processed/features_engineered_revised.csv`
+
+This dataset is generated from the cleaned telemetry dataset.
+
+It contains the original telemetry variables together with additional derived features created to support:
+
+- temporal analysis;
+- session-aware processing;
+- machine activity analysis;
+- sensor smoothing;
+- session-level anomaly indicators;
+- elapsed operating time calculations;
+- predictive analytics experiments.
+
+The feature-engineering pipeline reads the cleaned telemetry dataset and produces the feature-engineered dataset. :contentReference[oaicite:5]{index=5}
+
+---
+
+## `features_engineered_revised_sample.csv`
+
+A representative sample of the feature-engineered dataset is included in this repository.
+
+The sample contains:
+
+```text
+10,000 telemetry records
+33 variables
+```
+
+The dataset contains the original 21 telemetry variables together with 12 derived features.
+
+---
+
+# 6. Feature Engineering Pipeline
+
+The feature-engineering workflow consists of the following stages:
+
+```text
+Cleaned Telemetry Data
+        |
+        v
+Timestamp Processing
+        |
+        v
+Session Detection
+        |
+        v
+Session-Aware Missing-Value Handling
+        |
+        v
+Time Feature Creation
+        |
+        v
+Machine Activity Features
+        |
+        v
+Sensor Smoothing
+        |
+        v
+Session-Level Z-Score Features
+        |
+        v
+Elapsed Time Features
+        |
+        v
+Feature-Engineered Dataset
+```
+
+The complete feature-engineering process is implemented in:
+
+```text
+src/preprocessing/Revised_FeaturesEng.py
+```
+
+---
+
+# 7. Timestamp Processing
+
+The feature-engineering pipeline converts timestamps into UTC-aware datetime values.
+
+Invalid timestamps are removed, and the dataset is sorted chronologically. :contentReference[oaicite:6]{index=6}
+
+The timestamp variable is then used to support:
+
+- session detection;
+- temporal ordering;
+- time-based feature extraction;
+- elapsed-time calculations.
+
+---
+
+# 8. Session Identification
+
+Telemetry sessions are identified using temporal gaps between consecutive observations.
+
+The feature-engineering pipeline defines a new telemetry session when the time gap between observations exceeds:
+
+```text
+10 minutes
+```
+
+or:
+
+```text
+600 seconds
+```
+
+Conceptually:
+
+```text
+Telemetry Observations
+        |
+        v
+Calculate Time Gap
+        |
+        +-----------------------------+
+        |                             |
+        | Gap ≤ 10 minutes            | Gap > 10 minutes
+        v                             v
+Continue Current Session        Start New Session
+```
+
+The resulting session identifier is stored as:
+
+```text
+session_id
+```
+
+Importantly, session identification is used as a **data-organization procedure** and is not treated as an assumption of physical failure or degradation. :contentReference[oaicite:7]{index=7}
+
+---
+
+# 9. Missing-Value Handling
+
+Missing values are handled within individual telemetry sessions.
+
+The feature-engineering pipeline applies forward filling to selected temperature-related variables within each `session_id`.
+
+These include:
+
+```text
+T_Ambient_Actual
+T_Pinda_Actual
+T_Bed_Actual
+T_Hotend_Actual
+T_Tool_Actual
+T_Tool_Setpoint
+```
+
+The extrusion setpoint is also processed using session-level forward filling, with remaining missing values replaced by zero.
+
+Position and feed-rate variables are forward-filled within individual sessions.
+
+This session-aware processing helps prevent information from being propagated across separate telemetry sessions. :contentReference[oaicite:8]{index=8}
+
+---
+
+# 10. Derived Time Features
+
+The following time-based variables are created:
+
+| Feature | Description |
+|---|---|
+| `hour` | Hour extracted from the timestamp |
+| `dayofweek` | Day of the week extracted from the timestamp |
+| `minute` | Minute extracted from the timestamp |
+
+These variables provide temporal information that can be used during exploratory and predictive analysis. :contentReference[oaicite:9]{index=9}
+
+---
+
+# 11. Machine Activity Features
+
+## `is_active`
+
+The machine activity indicator is defined as:
+
+```text
+is_active = 1 if E_Setpoint > 0
+is_active = 0 otherwise
+```
+
+This feature provides a simple indicator of extrusion-related machine activity. :contentReference[oaicite:10]{index=10}
+
+---
+
+## `utilization`
+
+The `utilization` feature is calculated using a rolling mean of the `is_active` indicator within each telemetry session.
+
+The rolling window contains:
+
+```text
+60 observations
+```
+
+The resulting feature provides a local session-level measure of machine activity. :contentReference[oaicite:11]{index=11}
+
+---
+
+# 12. Smoothed Sensor Features
+
+Two rolling-average sensor features are created.
+
+## `T_Hotend_Actual_Smooth`
+
+A smoothed version of the actual hotend temperature.
+
+## `Power_Hotend_Smooth`
+
+A smoothed version of the hotend power measurement.
+
+Both features are calculated using a rolling window of:
+
+```text
+5 observations
+```
+
+and are calculated independently within each telemetry session. :contentReference[oaicite:12]{index=12}
+
+---
+
+# 13. Session-Level Z-Score Features
+
+The feature-engineering pipeline creates session-specific standardized variables for:
+
+- actual hotend temperature;
+- hotend power.
+
+The resulting features are:
+
+```text
+hotend_zscore
+power_zscore
+```
+
+The z-scores are calculated independently within each telemetry session.
+
+Conceptually:
+
+```text
+z-score =
+(value - session mean)
+/
+session standard deviation
+```
+
+If the standard deviation of a session is zero or undefined, the corresponding values are assigned zero.
+
+The session-level calculation is intended to characterize variation relative to the conditions of the individual operating session rather than across the entire dataset. :contentReference[oaicite:13]{index=13}
+
+---
+
+# 14. Session Elapsed Time Features
+
+Two elapsed-time variables are created.
+
+## `session_elapsed_seconds`
+
+The elapsed number of seconds since the beginning of the corresponding telemetry session.
+
+## `session_elapsed_hours`
+
+The elapsed session time expressed in hours.
+
+These variables are calculated relative to the first timestamp within each `session_id`. :contentReference[oaicite:14]{index=14}
+
+---
+
+# 15. Feature-Engineered Dataset Variables
+
+The feature-engineered dataset contains the original telemetry variables plus the following derived variables:
+
+```text
+session_id
+hour
+dayofweek
+minute
+is_active
+utilization
+T_Hotend_Actual_Smooth
+Power_Hotend_Smooth
+hotend_zscore
+power_zscore
+session_elapsed_seconds
+session_elapsed_hours
+```
+
+Therefore, the representative feature-engineered sample contains:
+
+```text
+21 original telemetry variables
++
+12 derived features
+=
+33 total variables
+```
+
+---
+
+# 16. Data Quality Checks
+
+The feature-engineering pipeline performs several data-quality checks before saving the final dataset.
+
+These checks include:
+
+- total number of rows;
+- total number of columns;
+- duplicate rows;
+- duplicate timestamps;
+- total missing values.
+
+The processed dataset is then exported as a CSV file. :contentReference[oaicite:15]{index=15}
+
+---
+
+# 17. Relationship to Other Repository Components
+
+The datasets in this directory provide the foundation for the remaining components of the repository.
+
+```text
+data/
+│
+├── raw/
+│   └── cleaned_printer_data.csv
+│
+└── processed/
+    └── features_engineered_revised.csv
+             |
+             v
+results/
+├── session_summary/
+│   └── session_summary_revised.csv
+│
+├── experiment_a/
+│   ├── within_session_split_summary.csv
+│   └── within_session_model_results.csv
+│
+└── experiment_b/
+    ├── windowed_features_1min.csv
+    ├── experiment_B_model_results.csv
+    ├── experiment_B_predictions.csv
+    ├── experiment_B_session_results.csv
+    ├── feature_target_correlations.csv
+    └── top_feature_target_correlations.pdf
+```
+
+---
+
+# 18. Reproducibility
+
+The general preprocessing workflow is:
+
+```text
+Original Printer Telemetry
+        |
+        v
+Data Cleaning
+        |
+        v
+cleaned_printer_data.csv
+        |
+        v
+Feature Engineering
+        |
+        v
+features_engineered_revised.csv
+        |
+        v
+Session Summary and Predictive Experiments
+```
+
+The relevant preprocessing scripts are:
+
+```text
+src/preprocessing/
+├── Cleaned_Dataset.py
+└── Revised_FeaturesEng.py
+```
+
+---
+
+# 19. Important Research Context
+
+The feature-engineered dataset is intended to support the proof-of-concept predictive analytics pipeline developed within the broader Digital Twin architecture.
+
+The creation of telemetry features does not, by itself, establish:
+
+- physical degradation measurements;
+- Remaining Useful Life (RUL);
+- machine-health states;
+- failure prediction;
+- validated predictive-maintenance capability.
+
+The feature-engineering script explicitly does not create an `RUL_simulated` target. Any synthetic prognostic target is defined separately after examination of the session structure. :contentReference[oaicite:16]{index=16}
+
+Accordingly, the datasets should be interpreted as supporting the technical implementation and experimental evaluation of a proof-of-concept predictive analytics pipeline.
+
+---
+
+# Citation and Use
+
+If you use this dataset, please cite the associated study and acknowledge the source repository.
+
+Please refer to the main repository `README.md` for:
+
+- the complete Digital Twin architecture;
+- experimental setup;
+- IoT telemetry acquisition;
+- data-processing workflow;
+- predictive experiments;
+- results;
+- limitations;
+- future research directions.
