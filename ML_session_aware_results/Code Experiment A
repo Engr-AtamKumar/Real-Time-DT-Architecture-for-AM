@@ -1,0 +1,693 @@
+# ============================================================
+# EXPERIMENT A
+# Within-Session Chronological Prediction
+# First 70% of each session = TRAIN
+# Last 30% of each session  = TEST
+#
+# Purpose:
+# Diagnose whether telemetry contains predictive information
+# about the synthetic temporal session-progress proxy.
+#
+# IMPORTANT:
+# This is NOT physical RUL validation.
+# ============================================================
+
+import os
+import warnings
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pandas as pd
+
+from sklearn.base import clone
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import StandardScaler
+
+from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import (
+    RandomForestRegressor,
+    ExtraTreesRegressor,
+    GradientBoostingRegressor,
+    HistGradientBoostingRegressor
+)
+
+from sklearn.metrics import (
+    r2_score,
+    mean_absolute_error,
+    mean_squared_error,
+    explained_variance_score
+)
+
+# XGBoost
+try:
+    from xgboost import XGBRegressor
+    XGB_AVAILABLE = True
+except ImportError:
+    XGB_AVAILABLE = False
+    print("WARNING: XGBoost is not installed. XGBoost will be skipped.")
+
+
+
+# ============================================================
+# SETTINGS
+# ============================================================
+
+INPUT_FILE = r"C:\My Personal Documents\Masters Thesis\Thesis Papers\Paper 1\Results\features_engineered_revised.csv"
+
+OUTPUT_DIR = r"C:\My Personal Documents\Masters Thesis\Thesis Papers\Paper 1\Results\within_session_results"
+
+
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+TRAIN_FRACTION = 0.70
+
+# Sessions with very few observations are not useful for this
+# diagnostic experiment.
+MIN_SESSION_ROWS = 1000
+
+RANDOM_STATE = 42
+
+
+# ============================================================
+# 2. LOAD DATA
+# ============================================================
+
+print("=" * 70)
+print("Loading engineered dataset...")
+print("=" * 70)
+
+df = pd.read_csv(INPUT_FILE)
+
+print(f"Dataset shape: {df.shape}")
+
+# ------------------------------------------------------------
+# Timestamp
+# ------------------------------------------------------------
+
+df["timestamp"] = pd.to_datetime(
+    df["timestamp"],
+    errors="coerce",
+    utc=True
+)
+
+df = df.dropna(subset=["timestamp"])
+
+# Sort chronologically
+df = df.sort_values(
+    ["session_id", "timestamp"]
+).reset_index(drop=True)
+
+print(f"Number of sessions: {df['session_id'].nunique()}")
+
+
+# ============================================================
+# 3. CREATE SYNTHETIC SESSION-PROGRESS TARGET
+# ============================================================
+
+print("\nCreating synthetic session-progress target...")
+
+# elapsed time from beginning of each session
+df["session_elapsed_seconds"] = (
+    df["timestamp"]
+    - df.groupby("session_id")["timestamp"].transform("min")
+).dt.total_seconds()
+
+# observed duration of each session
+session_duration = (
+    df.groupby("session_id")["session_elapsed_seconds"]
+      .transform("max")
+)
+
+# synthetic temporal progress
+df["synthetic_session_progress"] = np.where(
+    session_duration > 0,
+    df["session_elapsed_seconds"] / session_duration,
+    np.nan
+)
+
+# numerical protection
+df["synthetic_session_progress"] = (
+    df["synthetic_session_progress"]
+    .clip(0, 1)
+)
+
+print(
+    df["synthetic_session_progress"]
+    .describe()
+)
+
+
+# ============================================================
+# 4. SELECT USABLE SESSIONS
+# ============================================================
+
+session_counts = df.groupby("session_id").size()
+
+usable_sessions = session_counts[
+    session_counts >= MIN_SESSION_ROWS
+].index.tolist()
+
+excluded_sessions = session_counts[
+    session_counts < MIN_SESSION_ROWS
+].index.tolist()
+
+print("\nSession selection")
+print("-" * 70)
+
+print(f"Total sessions:     {len(session_counts)}")
+print(f"Usable sessions:    {len(usable_sessions)}")
+print(f"Excluded sessions:  {len(excluded_sessions)}")
+
+if excluded_sessions:
+    print(f"Excluded session IDs: {excluded_sessions}")
+
+
+# ============================================================
+# 5. DEFINE PREDICTOR VARIABLES
+# ============================================================
+
+# Variables that should NOT be used as predictors because they
+# directly encode time/session progress or identifiers.
+
+EXCLUDE_COLUMNS = {
+    "timestamp",
+    "session_id",
+    "synthetic_session_progress",
+    "session_elapsed_seconds",
+    "session_elapsed_hours",
+
+    # Direct calendar/time variables can act as clock proxies.
+    # We exclude them in this diagnostic experiment.
+    "hour",
+    "minute",
+    "dayofweek"
+}
+
+# Select numeric variables only
+numeric_columns = df.select_dtypes(
+    include=[np.number]
+).columns.tolist()
+
+predictors = [
+    c for c in numeric_columns
+    if c not in EXCLUDE_COLUMNS
+]
+
+print("\nPredictors")
+print("-" * 70)
+print(f"Number of predictors: {len(predictors)}")
+
+for c in predictors:
+    print(c)
+
+
+# ============================================================
+# 6. WITHIN-SESSION 70/30 SPLIT
+# ============================================================
+
+print("\nCreating within-session chronological splits...")
+print("-" * 70)
+
+train_parts = []
+test_parts = []
+
+split_summary = []
+
+for session_id in usable_sessions:
+
+    session_df = (
+        df[df["session_id"] == session_id]
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+    )
+
+    n = len(session_df)
+
+    split_idx = int(np.floor(n * TRAIN_FRACTION))
+
+    train_session = session_df.iloc[:split_idx].copy()
+    test_session = session_df.iloc[split_idx:].copy()
+
+    train_parts.append(train_session)
+    test_parts.append(test_session)
+
+    split_summary.append({
+        "session_id": session_id,
+        "total_rows": n,
+        "train_rows": len(train_session),
+        "test_rows": len(test_session),
+        "train_progress_min":
+            train_session["synthetic_session_progress"].min(),
+        "train_progress_max":
+            train_session["synthetic_session_progress"].max(),
+        "test_progress_min":
+            test_session["synthetic_session_progress"].min(),
+        "test_progress_max":
+            test_session["synthetic_session_progress"].max()
+    })
+
+
+train_df = pd.concat(
+    train_parts,
+    ignore_index=True
+)
+
+test_df = pd.concat(
+    test_parts,
+    ignore_index=True
+)
+
+split_summary_df = pd.DataFrame(split_summary)
+
+print(f"Training rows: {len(train_df):,}")
+print(f"Testing rows:  {len(test_df):,}")
+
+print("\nSplit summary:")
+print(split_summary_df.to_string(index=False))
+
+split_summary_df.to_csv(
+    os.path.join(
+        OUTPUT_DIR,
+        "within_session_split_summary.csv"
+    ),
+    index=False
+)
+
+
+# ============================================================
+# 7. PREPARE X AND y
+# ============================================================
+
+X_train = train_df[predictors].copy()
+y_train = train_df["synthetic_session_progress"].copy()
+
+X_test = test_df[predictors].copy()
+y_test = test_df["synthetic_session_progress"].copy()
+
+
+# ============================================================
+# 8. MODELS
+# ============================================================
+
+models = {
+
+    "Linear Regression": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("model", LinearRegression())
+    ]),
+
+    "Ridge": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler()),
+        ("model", Ridge(alpha=1.0))
+    ]),
+
+    "Decision Tree": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", DecisionTreeRegressor(
+            random_state=RANDOM_STATE,
+            max_depth=12,
+            min_samples_leaf=20
+        ))
+    ]),
+
+    "Random Forest": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", RandomForestRegressor(
+            n_estimators=200,
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+            max_depth=20,
+            min_samples_leaf=10
+        ))
+    ]),
+
+    "Extra Trees": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", ExtraTreesRegressor(
+            n_estimators=200,
+            random_state=RANDOM_STATE,
+            n_jobs=-1,
+            max_depth=20,
+            min_samples_leaf=10
+        ))
+    ]),
+
+    "Gradient Boosting": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", GradientBoostingRegressor(
+            random_state=RANDOM_STATE,
+            n_estimators=200,
+            max_depth=3,
+            learning_rate=0.05,
+            loss="squared_error"
+        ))
+    ]),
+
+    "HistGradientBoosting": Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", HistGradientBoostingRegressor(
+            random_state=RANDOM_STATE,
+            max_iter=200,
+            learning_rate=0.05,
+            max_leaf_nodes=31
+        ))
+    ])
+}
+
+
+if XGB_AVAILABLE:
+
+    models["XGBoost"] = Pipeline([
+        ("imputer", SimpleImputer(strategy="median")),
+        ("model", XGBRegressor(
+            n_estimators=200,
+            max_depth=6,
+            learning_rate=0.05,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            objective="reg:squarederror",
+            random_state=RANDOM_STATE,
+            n_jobs=-1
+        ))
+    ])
+
+
+# ============================================================
+# 9. METRIC FUNCTION
+# ============================================================
+
+def calculate_metrics(y_true, y_pred):
+
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    # Pearson correlation
+    if (
+        np.std(y_true) == 0
+        or np.std(y_pred) == 0
+    ):
+        r = np.nan
+    else:
+        r = np.corrcoef(y_true, y_pred)[0, 1]
+
+    r2 = r2_score(y_true, y_pred)
+
+    mae = mean_absolute_error(
+        y_true,
+        y_pred
+    )
+
+    mse = mean_squared_error(
+        y_true,
+        y_pred
+    )
+
+    rmse = np.sqrt(mse)
+
+    evs = explained_variance_score(
+        y_true,
+        y_pred
+    )
+
+    error = y_true - y_pred
+
+    error_variance = np.var(
+        error,
+        ddof=1
+    )
+
+    return {
+        "R": r,
+        "R2": r2,
+        "MAE": mae,
+        "MSE": mse,
+        "RMSE": rmse,
+        "EVS": evs,
+        "Error_Variance": error_variance
+    }
+
+
+# ============================================================
+# 10. BASELINES
+# ============================================================
+
+print("\nEvaluating baselines...")
+print("-" * 70)
+
+baseline_results = []
+
+# ------------------------------------------------------------
+# Training mean baseline
+# ------------------------------------------------------------
+
+train_mean = y_train.mean()
+
+mean_prediction = np.full(
+    len(y_test),
+    train_mean
+)
+
+metrics = calculate_metrics(
+    y_test,
+    mean_prediction
+)
+
+metrics["Model"] = "Training Mean Baseline"
+metrics["Prediction_Value"] = train_mean
+
+baseline_results.append(metrics)
+
+
+# ------------------------------------------------------------
+# Midpoint baseline
+# ------------------------------------------------------------
+
+midpoint_prediction = np.full(
+    len(y_test),
+    0.5
+)
+
+metrics = calculate_metrics(
+    y_test,
+    midpoint_prediction
+)
+
+metrics["Model"] = "Midpoint Baseline"
+metrics["Prediction_Value"] = 0.5
+
+baseline_results.append(metrics)
+
+
+# ============================================================
+# 11. TRAIN AND EVALUATE MODELS
+# ============================================================
+
+print("\nTraining models...")
+print("=" * 70)
+
+results = []
+
+predictions = {}
+
+for model_name, model in models.items():
+
+    print(f"\nRunning: {model_name}")
+
+    fitted_model = clone(model)
+
+    fitted_model.fit(
+        X_train,
+        y_train
+    )
+
+    y_pred = fitted_model.predict(
+        X_test
+    )
+
+    metrics = calculate_metrics(
+        y_test,
+        y_pred
+    )
+
+    metrics["Model"] = model_name
+    metrics["Prediction_Value"] = np.nan
+
+    results.append(metrics)
+
+    predictions[model_name] = y_pred
+
+    print(
+        f"R = {metrics['R']:.5f}, "
+        f"R² = {metrics['R2']:.5f}, "
+        f"MAE = {metrics['MAE']:.5f}, "
+        f"RMSE = {metrics['RMSE']:.5f}, "
+        f"EVS = {metrics['EVS']:.5f}"
+    )
+
+
+# ============================================================
+# 12. COMBINE RESULTS
+# ============================================================
+
+baseline_df = pd.DataFrame(baseline_results)
+
+model_df = pd.DataFrame(results)
+
+all_results = pd.concat(
+    [baseline_df, model_df],
+    ignore_index=True
+)
+
+all_results = all_results[
+    [
+        "Model",
+        "R",
+        "R2",
+        "MAE",
+        "MSE",
+        "RMSE",
+        "EVS",
+        "Error_Variance",
+        "Prediction_Value"
+    ]
+]
+
+print("\n")
+print("=" * 70)
+print("FINAL WITHIN-SESSION RESULTS")
+print("=" * 70)
+
+print(
+    all_results.to_string(
+        index=False
+    )
+)
+
+
+# ============================================================
+# 13. SAVE RESULTS
+# ============================================================
+
+results_file = os.path.join(
+    OUTPUT_DIR,
+    "within_session_model_results.csv"
+)
+
+all_results.to_csv(
+    results_file,
+    index=False
+)
+
+print(
+    f"\nResults saved to:\n{results_file}"
+)
+
+
+# ============================================================
+# 14. SAVE TEST PREDICTIONS
+# ============================================================
+
+prediction_df = test_df[
+    [
+        "timestamp",
+        "session_id",
+        "synthetic_session_progress"
+    ]
+].copy()
+
+prediction_df.rename(
+    columns={
+        "synthetic_session_progress":
+            "Actual_Synthetic_Progress"
+    },
+    inplace=True
+)
+
+for model_name, pred in predictions.items():
+
+    safe_name = (
+        model_name
+        .replace(" ", "_")
+        .replace("/", "_")
+    )
+
+    prediction_df[
+        f"Predicted_{safe_name}"
+    ] = pred
+
+prediction_file = os.path.join(
+    OUTPUT_DIR,
+    "within_session_predictions.csv"
+)
+
+prediction_df.to_csv(
+    prediction_file,
+    index=False
+)
+
+print(
+    f"Predictions saved to:\n{prediction_file}"
+)
+
+
+# ============================================================
+# 15. DETERMINE BEST ML MODEL
+# ============================================================
+
+model_only = all_results[
+    ~all_results["Model"].str.contains(
+        "Baseline",
+        case=False,
+        na=False
+    )
+].copy()
+
+best_model = model_only.loc[
+    model_only["R2"].idxmax()
+]
+
+baseline_mean = all_results[
+    all_results["Model"] ==
+    "Training Mean Baseline"
+].iloc[0]
+
+print("\n")
+print("=" * 70)
+print("DIAGNOSTIC SUMMARY")
+print("=" * 70)
+
+print(
+    f"Best ML model by R²: "
+    f"{best_model['Model']}"
+)
+
+print(
+    f"Best ML R²: "
+    f"{best_model['R2']:.5f}"
+)
+
+print(
+    f"Training-mean baseline R²: "
+    f"{baseline_mean['R2']:.5f}"
+)
+
+if best_model["R2"] > baseline_mean["R2"]:
+
+    print(
+        "\nThe best ML model outperformed "
+        "the training-mean baseline in R²."
+    )
+
+else:
+
+    print(
+        "\nThe best ML model did NOT outperform "
+        "the training-mean baseline."
+    )
+
+
+print("\nExperiment A completed.")
