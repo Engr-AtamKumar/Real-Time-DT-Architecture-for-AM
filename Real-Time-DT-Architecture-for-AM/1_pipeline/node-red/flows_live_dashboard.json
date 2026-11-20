@@ -1,0 +1,249 @@
+[
+    {
+        "id": "6a4b74edd716ac5d",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "mqtt_in_printer_data",
+        "type": "mqtt in",
+        "z": "6a4b74edd716ac5d",
+        "name": "MQTT - printer/data",
+        "topic": "printer/data",
+        "qos": "2",
+        "datatype": "auto",
+        "broker": "13458da1ae11270a",
+        "nl": false,
+        "rap": false,
+        "inputs": 0,
+        "x": 370,
+        "y": 200,
+        "wires": [
+            [
+                "json_parse",
+                "debug_raw"
+            ]
+        ]
+    },
+    {
+        "id": "json_parse",
+        "type": "json",
+        "z": "6a4b74edd716ac5d",
+        "name": "Parse JSON",
+        "property": "payload",
+        "action": "",
+        "pretty": false,
+        "x": 560,
+        "y": 200,
+        "wires": [
+            [
+                "data_router"
+            ]
+        ]
+    },
+    {
+        "id": "data_router",
+        "type": "function",
+        "z": "6a4b74edd716ac5d",
+        "name": "Split values",
+        "func": "// Split and set gauges\nmsg1 = { payload: msg.payload.T_Hotend_Actual };\nmsg2 = { payload: msg.payload.T_Bed_Actual };\nmsg3 = { payload: msg.payload.Power_Hotend };\nmsg4 = { payload: msg.payload.Power_Bed };\nmsg5 = { payload: msg.payload.Speed_Fan_Hotend };\nreturn [msg1, msg2, msg3, msg4, msg5];",
+        "outputs": 5,
+        "noerr": 0,
+        "x": 770,
+        "y": 200,
+        "wires": [
+            [
+                "gauge_hotend"
+            ],
+            [
+                "gauge_bed"
+            ],
+            [
+                "gauge_power_hotend"
+            ],
+            [
+                "gauge_power_bed"
+            ],
+            [
+                "gauge_fan"
+            ]
+        ]
+    },
+    {
+        "id": "gauge_hotend",
+        "type": "ui_gauge",
+        "z": "6a4b74edd716ac5d",
+        "name": "Hotend Temp (°C)",
+        "group": "printer_dashboard",
+        "order": 1,
+        "width": 3,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Hotend Temp",
+        "label": "°C",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 300,
+        "x": 930,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "gauge_bed",
+        "type": "ui_gauge",
+        "z": "6a4b74edd716ac5d",
+        "name": "Bed Temp (°C)",
+        "group": "printer_dashboard",
+        "order": 2,
+        "width": 3,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Bed Temp",
+        "label": "°C",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 120,
+        "x": 1000,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "gauge_power_hotend",
+        "type": "ui_gauge",
+        "z": "6a4b74edd716ac5d",
+        "name": "Power Hotend (W)",
+        "group": "printer_dashboard",
+        "order": 3,
+        "width": 3,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Power Hotend",
+        "label": "W",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 200,
+        "x": 1000,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "gauge_power_bed",
+        "type": "ui_gauge",
+        "z": "6a4b74edd716ac5d",
+        "name": "Power Bed (W)",
+        "group": "printer_dashboard",
+        "order": 4,
+        "width": 3,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Power Bed",
+        "label": "W",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 200,
+        "x": 1000,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "gauge_fan",
+        "type": "ui_gauge",
+        "z": "6a4b74edd716ac5d",
+        "name": "Fan Speed",
+        "group": "printer_dashboard",
+        "order": 5,
+        "width": 3,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Fan Speed",
+        "label": "RPM",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 5000,
+        "x": 1000,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "debug_raw",
+        "type": "debug",
+        "z": "6a4b74edd716ac5d",
+        "name": "Raw MQTT",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 570,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "c1389194d01ff73a",
+        "type": "debug",
+        "z": "6a4b74edd716ac5d",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 220,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "13458da1ae11270a",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "localhost",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "printer_dashboard",
+        "type": "ui_group",
+        "name": "Printer Dashboard",
+        "tab": "printer_ui_tab",
+        "order": 1,
+        "disp": true,
+        "width": 12
+    },
+    {
+        "id": "printer_ui_tab",
+        "type": "ui_tab",
+        "name": "3D Printer Monitor",
+        "icon": "dashboard",
+        "order": 1
+    }
+]

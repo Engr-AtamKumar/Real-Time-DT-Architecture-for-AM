@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: dt
+    folder: Digital Twin
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

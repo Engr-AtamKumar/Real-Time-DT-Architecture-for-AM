@@ -1,0 +1,56 @@
+{
+  "uid": "dt-printer",
+  "title": "Prusa i3 MK3S Digital Twin (replay benchmark)",
+  "timezone": "browser",
+  "refresh": "5s",
+  "time": {"from": "now-5m", "to": "now"},
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "Hotend temperature: actual vs setpoint (printer 1)",
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "fieldConfig": {"defaults": {"unit": "celsius"}, "overrides": []},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT time_bucket('1 second', time) AS time, avg(t_hotend) AS \"actual\", avg(t_hotend_sp) AS \"setpoint\" FROM telemetry WHERE $__timeFilter(time) AND printer_id = 1 AND t_hotend IS NOT NULL GROUP BY 1 ORDER BY 1"}]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Hotend and bed power (printer 1)",
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "fieldConfig": {"defaults": {"unit": "watt"}, "overrides": []},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT time_bucket('1 second', time) AS time, avg(p_hotend) AS \"hotend W\", avg(p_bed) AS \"bed W\" FROM telemetry WHERE $__timeFilter(time) AND printer_id = 1 AND p_hotend IS NOT NULL GROUP BY 1 ORDER BY 1"}]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Ingest rate per second (all printers)",
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT time_bucket('1 second', t_db) AS time, count(*) AS \"rows/s\" FROM telemetry WHERE $__timeFilter(t_db) GROUP BY 1 ORDER BY 1"}]
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "End-to-end latency, MQTT publish -> DB (ms, p95 per second)",
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT time_bucket('1 second', t_db) AS time, percentile_cont(0.95) WITHIN GROUP (ORDER BY (extract(epoch from t_db) - t_pub) * 1000) AS \"p95 latency\" FROM telemetry WHERE $__timeFilter(t_db) GROUP BY 1 ORDER BY 1"}]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Active printers (last 10 s)",
+      "gridPos": {"x": 0, "y": 16, "w": 6, "h": 5},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT count(DISTINCT printer_id) AS printers FROM telemetry WHERE time > now() - interval '10 seconds'"}]
+    },
+    {
+      "id": 6, "type": "stat", "title": "Data age at display (s)",
+      "gridPos": {"x": 6, "y": 16, "w": 6, "h": 5},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "tsdb"},
+      "fieldConfig": {"defaults": {"unit": "s", "decimals": 2}, "overrides": []},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT extract(epoch from (now() - max(t_db))) AS age FROM telemetry"}]
+    }
+  ]
+}

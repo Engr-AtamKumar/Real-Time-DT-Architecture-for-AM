@@ -1,0 +1,66 @@
+#  Replay benchmark for the Prusa i3 MK3S Digital Twin pipeline
+#  MQTT (Mosquitto) -> Node-RED -> TimescaleDB -> Grafana
+#
+#  Usage (in this folder, with Docker Desktop running):
+#     docker compose up -d --build          (start the stack, wait ~60 s)
+#     docker compose run --rm bench         (run the benchmark, ~20 min)
+#     docker compose down -v                (stop and delete everything afterwards)
+#  Results are written to ./results
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports: ["11883:1883"]
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: dt
+      POSTGRES_PASSWORD: dtbench
+      POSTGRES_DB: printer
+    volumes:
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports: ["15432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dt -d printer"]
+      interval: 5s
+      retries: 20
+
+  nodered:
+    build: ./nodered
+    environment:
+      PGHOST: timescaledb
+      PGUSER: dt
+      PGPASSWORD: dtbench
+      PGDATABASE: printer
+    depends_on:
+      timescaledb: {condition: service_healthy}
+      mosquitto: {condition: service_started}
+    volumes:
+      - ./nodered/flows.json:/data/flows.json
+    ports: ["11880:1880"]
+
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      timescaledb: {condition: service_healthy}
+    ports: ["13000:3000"]
+
+  bench:
+    build: ./bench
+    profiles: ["bench"]
+    volumes:
+      - ./data:/data:ro
+      - ./results:/results
+    depends_on: [mosquitto, timescaledb, nodered, grafana]
